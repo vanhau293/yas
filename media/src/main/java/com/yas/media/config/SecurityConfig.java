@@ -1,39 +1,34 @@
 package com.yas.media.config;
 
+import java.util.Collection;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
-import java.util.Collection;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 @Configuration
 public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
-        http
-                .authorizeRequests()
-                .antMatchers("/medias").hasRole("ADMIN")
-                .antMatchers("/medias/**").permitAll()
-                .anyRequest().authenticated()
-                .and()
-                .oauth2ResourceServer().jwt();
-
-        return http.build();
-    }
-
-    @Bean
-    public WebSecurityCustomizer webSecurityCustomizer() {
-        return web -> web.ignoring().antMatchers("/swagger-ui", "/swagger-ui/**", "/error", "/v3/api-docs/**");
+        return http
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/actuator/prometheus", "/actuator/health/**",
+                    "/swagger-ui", "/swagger-ui/**", "/error", "/v3/api-docs/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/medias/**").permitAll()
+                .requestMatchers("/medias").hasRole("ADMIN")
+                .anyRequest().authenticated())
+            .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+            .build();
     }
 
     @Bean
@@ -42,8 +37,8 @@ public class SecurityConfig {
             Map<String, Collection<String>> realmAccess = jwt.getClaim("realm_access");
             Collection<String> roles = realmAccess.get("roles");
             return roles.stream()
-                    .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
-                    .collect(Collectors.toList());
+                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                .collect(Collectors.toList());
         };
 
         var jwtAuthenticationConverter = new JwtAuthenticationConverter();

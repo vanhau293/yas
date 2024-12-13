@@ -1,10 +1,15 @@
 package com.yas.product.model;
 
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
-import javax.persistence.Table;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import java.util.List;
+
+import com.yas.commonlibrary.model.AbstractAuditEntity;
+
 import lombok.Getter;
 import lombok.Setter;
 
@@ -13,28 +18,29 @@ import lombok.Setter;
 @Getter
 @Setter
 public class Brand extends AbstractAuditEntity {
-  @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private Long id;
+    @OneToMany(mappedBy = "brand")
+    List<Product> products;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    private String slug;
+    private boolean isPublished;
 
-  private String name;
-
-  private String slug;
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof Brand)) {
+            return false;
+        }
+        return id != null && id.equals(((Brand) o).id);
     }
-    if (!(o instanceof Brand)) {
-      return false;
-    }
-    return id != null && id.equals(((Brand) o).id);
-  }
 
-  @Override
-  public int hashCode() {
-    // see https://vladmihalcea.com/how-to-implement-equals-and-hashcode-using-the-jpa-entity-identifier/
-    return getClass().hashCode();
-  }
+    @Override
+    public int hashCode() {
+        // see https://vladmihalcea.com/how-to-implement-equals-and-hashcode-using-the-jpa-entity-identifier/
+        return getClass().hashCode();
+    }
 }

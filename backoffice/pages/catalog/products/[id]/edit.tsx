@@ -1,178 +1,143 @@
-import type { NextPage } from 'next'
-import { useRouter } from 'next/router'
-import { useEffect, useState } from 'react'
-import { Product } from '../../../../modules/catalog/models/Product'
-import { getProduct, updateProduct } from '../../../../modules/catalog/services/ProductService'
-import { useForm } from "react-hook-form";
-import slugify from "slugify";
+import type { NextPage } from 'next';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { useEffect, useState } from 'react';
+import { Tab, Tabs } from 'react-bootstrap';
+import { SubmitHandler, useForm } from 'react-hook-form';
 
-const ProductEdit: NextPage = () => {
+import {
+  CrossSellProduct,
+  ProductCategoryMapping,
+  ProductGeneralInformation,
+  ProductImage,
+  ProductSEO,
+  ProductVariation,
+  RelatedProduct,
+} from '@catalogComponents/index';
+import { FormProduct } from '@catalogModels/FormProduct';
+import { Product } from '@catalogModels/Product';
+import { mapFormProductToProductPayload } from '@catalogModels/ProductPayload';
+import { getProduct, updateProduct } from '@catalogServices/ProductService';
+import { handleUpdatingResponse } from '@commonServices/ResponseStatusHandlingService';
+import { toastError } from '@commonServices/ToastService';
+import { PRODUCT_URL, ResponseStatus } from '@constants/Common';
+import ProductAttributes from '../[id]/productAttributes';
+
+const EditProduct: NextPage = () => {
   //Get ID
-  const router = useRouter()
+  const router = useRouter();
   const { id } = router.query;
-  //Variables
-  const [thumbnail, setThumbnail] = useState<File>();
-  const [thumbnailURL, setThumbnailURL] = useState<string>();
-  const [generateSlug, setGenerateSlug] = useState<string>();
 
-  //Get product detail
   const [product, setProduct] = useState<Product>();
   const [isLoading, setLoading] = useState(false);
-  //Form validate
-  const { register, formState: { errors }, handleSubmit } = useForm();
+  const [tabKey, setTabKey] = useState('general');
+
+  const {
+    register,
+    setValue,
+    handleSubmit,
+    getValues,
+    watch,
+    formState: { errors },
+  } = useForm<FormProduct>();
 
   useEffect(() => {
     setLoading(true);
     if (id) {
       getProduct(+id)
         .then((data) => {
-          setProduct(data);
-          setLoading(false);
-        });
+          if (data.id) {
+            setProduct(data);
+            setLoading(false);
+          } else {
+            //Show error
+            toastError(data.detail);
+            router.push(PRODUCT_URL).catch((error) => console.log(error));
+          }
+        })
+        .catch((error) => console.log(error));
     }
-  }, []);
-  //Handle
-  const onNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setGenerateSlug(slugify(event.target.value.replace(/(^\s+|\s+$)/g, '').toLowerCase()));
-  };
-  const onSlugChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setGenerateSlug(event.target.value.replace(/(^\s+|\s+$)/g, '').toLowerCase());
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
-  const onThumbnailSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      const i = event.target.files[0];
-      setThumbnail(i);
-      setThumbnailURL(URL.createObjectURL(i));
-    }
-  };
-  const onSubmit = (data: any) => {
-    const slug = generateSlug ? generateSlug : data.slug;
-    let product: Product = {
-      id: 0,
-      name: data.name.replace(/(^\s+|\s+$)/g, ''),
-      slug: slug.replace(/(^\s+|\s+$)/g, ''),
-      description: data.description?.replace(/(^\s+|\s+$)/g, ''),
-      shortDescription: data.shortDescription.replace(/(^\s+|\s+$)/g, ''),
-      specification: data.specification.replace(/(^\s+|\s+$)/g, ''),
-      sku: data.sku.replace(/(^\s+|\s+$)/g, ''),
-      gtin: data.gtin.replace(/(^\s+|\s+$)/g, ''),
-      metaKeyword: data.metaKeyword.replace(/(^\s+|\s+$)/g, ''),
-      metaDescription: data.metaDescription?.replace(/(^\s+|\s+$)/g, ''),
-    }
-    if (!thumbnail) {
-      alert("A thumbnail is required.")
-    }
-    else {
-      if (id) {
-        updateProduct(+id, product, thumbnail);
-        location.replace("/catalog/products");
+  //Form validate
+  const onSubmit: SubmitHandler<FormProduct> = async (data) => {
+    if (id) {
+      const payload = mapFormProductToProductPayload(data);
+      const productResponse = await updateProduct(+id, payload);
+      if (productResponse.status === ResponseStatus.SUCCESS) {
+        await router.push(PRODUCT_URL);
       }
+      handleUpdatingResponse(productResponse);
     }
-  }
-  if (isLoading) return <p>Loading...</p>;
-  if (!product) { return <p>No product</p>; }
-  else {
-    return (
-      <>
-        <div className='row mt-5'>
-          <div className='col-md-8'>
-            <h2>Update product: #{product.id}</h2>
-            <form onSubmit={handleSubmit(onSubmit)}>
-              <div className="mb-3">
-                <label className='form-label' htmlFor="name">Name <span style={{ 'color': 'red' }}>*</span></label>
-                <input
-                  defaultValue={product.name}
-                  {...register("name", { required: "Name is required", onChange: onNameChange })}
-                  className={`form-control ${errors.name ? "border-danger" : ""}`}
-                  type="text" id="name" name="name"
-                />
-                <p className='error-field'><>{errors.name?.message}</></p>
-              </div>
-              <div className="mb-3">
-                <label className='form-label' htmlFor="slug">Slug <span style={{ 'color': 'red' }}>*</span></label>
-                <input
-                  value={generateSlug ? generateSlug : product.slug}
-                  {...register("slug", { required: "Slug is required", onChange: onSlugChange })}
-                  className={`form-control ${errors.slug ? "border-danger" : ""}`}
-                  type="text" id="slug" name="slug"
-                />
-                <p className='error-field'><>{errors.slug?.message}</></p>
-              </div>
-              <div className="mb-3">
-                <label className='form-label' htmlFor="short-description">Short Description <span style={{ 'color': 'red' }}>*</span></label>
-                <input
-                  defaultValue={product.shortDescription}
-                  {...register("shortDescription", { required: "Short Description is required" })}
-                  className={`form-control ${errors.shortDescription ? "border-danger" : ""}`}
-                  type="text" id="short-description" name="shortDescription" />
-                <p className='error-field'><>{errors.shortDescription?.message}</></p>
-              </div>
-              <div className="mb-3">
-                <label className='form-label' htmlFor="description">Description</label>
-                <textarea
-                  defaultValue={product.description}
-                  {...register("description")}
-                  className="form-control"
-                  id="description" name="description" />
-                <p className='error-field'><>{errors.description?.message}</></p>
-              </div>
-              <div className="mb-3">
-                <label className='form-label' htmlFor="specification">Specification <span style={{ 'color': 'red' }}>*</span></label>
-                <textarea
-                  defaultValue={product.specification}
-                  {...register("specification", { required: "Specification is required" })}
-                  className={`form-control ${errors.specification ? "border-danger" : ""}`}
-                  id="specification" name="specification" />
-                <p className='error-field'><>{errors.specification?.message}</></p>
-              </div>
-              <div className="mb-3">
-                <label className='form-label' htmlFor="sku">SKU <span style={{ 'color': 'red' }}>*</span></label>
-                <input
-                  defaultValue={product.sku}
-                  {...register("sku", { required: "SKU is required" })}
-                  className={`form-control ${errors.sku ? "border-danger" : ""}`}
-                  type="text" id="sku" name="sku" />
-                <p className='error-field'><>{errors.sku?.message}</></p>
-              </div>
-              <div className="mb-3">
-                <label className='form-label' htmlFor="gtin">GTIN <span style={{ 'color': 'red' }}>*</span></label>
-                <input
-                  defaultValue={product.gtin}
-                  {...register("gtin", { required: "GTIN is required" })}
-                  className={`form-control ${errors.gtin ? "border-danger" : ""}`}
-                  type="text" id="gtin" name="gtin" />
-                <p className='error-field'><>{errors.gtin?.message}</></p>
-              </div>
-              <div className="mb-3">
-                <label className='form-label' htmlFor="meta-keyword">Meta Keyword <span style={{ 'color': 'red' }}>*</span></label>
-                <input
-                  defaultValue={product.metaKeyword}
-                  {...register("metaKeyword", { required: "Meta Keyword is required" })}
-                  className={`form-control ${errors.metaKeyword ? "border-danger" : ""}`}
-                  type="text" id="meta-keyword" name="metaKeyword" />
-                <p className='error-field'><>{errors.metaKeyword?.message}</></p>
-              </div>
-              <div className="mb-3">
-                <label className='form-label' htmlFor="meta-description">Meta Description</label>
-                <input
-                  defaultValue={product.metaDescription}
-                  {...register("metaDescription")}
-                  type="text" className="form-control" id="meta-description" name="metaDescription" />
-                <p className='error-field'><>{errors.metaDescription?.message}</></p>
-              </div>
-              <div className='mb-3'>
-                <label className='form-label' htmlFor="thumbnail">Thumbnail <span style={{ 'color': 'red' }}>*</span></label>
-                <input className="form-control" type="file" name="thumbnail" onChange={onThumbnailSelected} />
-                <img style={{ width: '150px' }} src={thumbnailURL ? thumbnailURL : product.thumbnailMediaUrl} />
-              </div>
-              <button className="btn btn-primary" type="submit">Submit</button>
-            </form>
-          </div>
-        </div>
-      </>
-    )
-  }
-}
+  };
 
-export default ProductEdit
+  useEffect(() => {
+    if (Object.keys(errors).length) {
+      setTabKey('general');
+      setTimeout(() => {
+        document.getElementById(Object.keys(errors)[0])?.scrollIntoView();
+      }, 0);
+    }
+  }, [errors]);
+
+  if (isLoading) return <p>Loading...</p>;
+  if (!product) {
+    return <p>No product</p>;
+  } else {
+    return (
+      <div className="create-product">
+        <h2>Update Product: {product.name}</h2>
+
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <Tabs className="mb-3" activeKey={tabKey} onSelect={(e: any) => setTabKey(e)}>
+            <Tab eventKey={'general'} title="General Information">
+              <ProductGeneralInformation
+                register={register}
+                errors={errors}
+                setValue={setValue}
+                watch={watch}
+              />
+            </Tab>
+            <Tab eventKey={'image'} title="Product Images">
+              <ProductImage product={product} setValue={setValue} />
+            </Tab>
+            <Tab eventKey={'variation'} title="Product Variations">
+              <ProductVariation getValue={getValues} setValue={setValue} />
+            </Tab>
+            <Tab eventKey={'attribute'} title="Product Attributes">
+              <ProductAttributes />
+            </Tab>
+            <Tab eventKey={'category'} title="Category Mapping">
+              <ProductCategoryMapping product={product} setValue={setValue} getValue={getValues} />
+            </Tab>
+            <Tab eventKey={'related'} title="Related Products">
+              <RelatedProduct setValue={setValue} getValue={getValues} />
+            </Tab>
+            <Tab eventKey={'cross-sell'} title="Cross-sell Product">
+              <CrossSellProduct setValue={setValue} getValue={getValues} />
+            </Tab>
+            <Tab eventKey={'seo'} title="SEO">
+              <ProductSEO product={product} register={register} errors={errors} />
+            </Tab>
+          </Tabs>
+
+          {tabKey === 'attribute' ? (
+            <div className="text-center"></div>
+          ) : (
+            <div className="text-center">
+              <button className="btn btn-primary" type="submit">
+                Save
+              </button>
+              <Link href="/catalog/products">
+                <button className="btn btn-secondary m-3">Cancel</button>
+              </Link>
+            </div>
+          )}
+        </form>
+      </div>
+    );
+  }
+};
+
+export default EditProduct;

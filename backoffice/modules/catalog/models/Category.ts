@@ -1,11 +1,16 @@
 export type Category = {
-  id : number;
+  id: number;
   name: string;
   description: string;
   slug: string;
-  parentId: number;
-  parentName: string;
+  parentId: number | null;
   metaKeywords: string;
   metaDescription: string;
   displayOrder: number;
+  isPublish: boolean;
+  imageId?: number;
+  categoryImage?: {
+    id: number;
+    url: string;
+  };
 };

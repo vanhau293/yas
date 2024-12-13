@@ -1,3 +1,6 @@
+import { Category } from './Category';
+import { Media } from './Media';
+
 export type Product = {
   id: number;
   name: string;
@@ -7,7 +10,26 @@ export type Product = {
   sku: string;
   gtin: string;
   slug: string;
+  weight: number;
+  dimensionUnit: string;
+  length: number;
+  width: number;
+  height: number;
+  price: number;
+  metaTitle: string;
   metaKeyword: string;
-  metaDescription?: string;
-  thumbnailMediaUrl?: string;
+  metaDescription: string;
+  isAllowedToOrder: boolean;
+  isPublished: boolean;
+  isFeatured: boolean;
+  isVisible?: boolean;
+  stockTrackingEnabled: boolean;
+  taxIncluded: boolean;
+  brandId: number;
+  categories: Category[];
+  thumbnailMedia: Media;
+  productImageMedias: Media[];
+  createdOn: Date;
+  taxClassId: number;
+  parentId: number;
 };

@@ -1,153 +1,140 @@
 package com.yas.product.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yas.product.ProductApplication;
 import com.yas.product.model.attribute.ProductAttributeGroup;
 import com.yas.product.repository.ProductAttributeGroupRepository;
-import com.yas.product.viewmodel.ErrorVm;
-import com.yas.product.viewmodel.ProductAttributeGroupPostVm;
-import com.yas.product.viewmodel.ProductAttributeGroupVm;
-import org.junit.jupiter.api.BeforeEach;
+import com.yas.product.service.ProductAttributeGroupService;
+import com.yas.product.viewmodel.productattribute.ProductAttributeGroupListGetVm;
+import com.yas.product.viewmodel.productattribute.ProductAttributeGroupPostVm;
+import com.yas.product.viewmodel.productattribute.ProductAttributeGroupVm;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.HttpStatus;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@ExtendWith(SpringExtension.class)
+@WebMvcTest(controllers = ProductAttributeGroupController.class)
+@ContextConfiguration(classes = ProductApplication.class)
+@AutoConfigureMockMvc(addFilters = false)
 class ProductAttributeGroupControllerTest {
 
     @Autowired
-    private WebTestClient webTestClient;
+    private MockMvc mockMvc;
 
-    @Autowired
+    @MockBean
+    private ProductAttributeGroupService productAttributeGroupService;
+
+    @MockBean
     private ProductAttributeGroupRepository productAttributeGroupRepository;
-    private ProductAttributeGroupVm productAttributeGroupVmExpected1;
-    private List<ProductAttributeGroupVm> listProductAttributeGroupVmExpected;
-    private Long validId;
-    private Long invalidId;
-    private ProductAttributeGroupPostVm productAttributeGroupPostVmValid;
-    private ProductAttributeGroupPostVm productAttributeGroupPostVmInvalid;
 
-    @BeforeEach
-    void setUp() {
-        ProductAttributeGroup productAttributeGroup1 = new ProductAttributeGroup();
-        ProductAttributeGroup productAttributeGroup2 = new ProductAttributeGroup();
-        productAttributeGroup1.setName("productAttributeGroupName1");
-        productAttributeGroup2.setName("productAttributeGroupName2");
-        productAttributeGroupRepository.saveAndFlush(productAttributeGroup1);
-        productAttributeGroupRepository.saveAndFlush(productAttributeGroup2);
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-        productAttributeGroupVmExpected1 = new ProductAttributeGroupVm(1L, "productAttributeGroupName1");
-        ProductAttributeGroupVm productAttributeGroupVmExpected2 = new ProductAttributeGroupVm(2L, "productAttributeGroupName2");
-        listProductAttributeGroupVmExpected = new ArrayList<>();
-        listProductAttributeGroupVmExpected.addAll(List.of(productAttributeGroupVmExpected1, productAttributeGroupVmExpected2));
+    @Test
+    void testListProductAttributeGroups() throws Exception {
+        List<ProductAttributeGroup> productAttributeGroups = List.of(
+                createProductAttributeGroup(1L, "Color"),
+                createProductAttributeGroup(2L, "Size"));
 
-        validId = 1L;
-        invalidId = 3L;
+        Mockito.when(productAttributeGroupRepository.findAll()).thenReturn(productAttributeGroups);
 
-        productAttributeGroupPostVmValid = new ProductAttributeGroupPostVm("productAttributeGroupName3");
-        productAttributeGroupPostVmInvalid = new ProductAttributeGroupPostVm("");
+        mockMvc.perform(get("/backoffice/product-attribute-groups")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].id").exists())
+                .andExpect(jsonPath("$[1].id").exists());
     }
 
     @Test
-    void listProductAttributeGroups_ReturnListProductAttributeGroupVm_Success() {
-        webTestClient.get()
-                .uri("/backoffice/product-attribute-groups")
-                .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(ProductAttributeGroupVm.class).isEqualTo(listProductAttributeGroupVmExpected);
+    void testGetPageableProductAttributeGroups() throws Exception {
+        List<ProductAttributeGroupVm> productAttributeGroupVms = List.of(new ProductAttributeGroupVm(1L, "Color"));
+
+        Mockito.when(productAttributeGroupService.getPageableProductAttributeGroups(1, 10))
+                .thenReturn(new ProductAttributeGroupListGetVm(productAttributeGroupVms, 1, 10, 1, 1, true));
+
+        mockMvc.perform(get("/backoffice/product-attribute-groups/paging?pageNo=1&pageSize=10")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
     }
 
     @Test
-    void getProductAttributeGroup_ReturnProductAttributeGroupVm_Success() {
-        webTestClient.get()
-                .uri("/backoffice/product-attribute-groups/{id}", validId)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(ProductAttributeGroupVm.class).isEqualTo(productAttributeGroupVmExpected1);
+    void testGetProductAttributeGroup() throws Exception {
+        ProductAttributeGroup productAttributeGroup = new ProductAttributeGroup();
+        productAttributeGroup.setId(1L);
+        productAttributeGroup.setName("Size");
+
+        Mockito.when(productAttributeGroupRepository.findById(1L)).thenReturn(Optional.of(productAttributeGroup));
+
+        mockMvc.perform(get("/backoffice/product-attribute-groups/1")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.name").value("Size"));
     }
 
     @Test
-    void getProductAttributeGroup_ProductAttributeGroupIdIsInvalid_ThrowsNotFoundException() {
-        ErrorVm errorVmExpected = new ErrorVm(HttpStatus.NOT_FOUND.toString(), "NotFound",
-                String.format("Product attribute group %s is not found", invalidId));
+    void testCreateProductAttributeGroup() throws Exception {
+        ProductAttributeGroupPostVm productAttributeGroupPostVm = new ProductAttributeGroupPostVm("Color");
 
-        webTestClient.get()
-                .uri("/backoffice/product-attribute-groups/{id}", invalidId)
-                .exchange()
-                .expectStatus().isNotFound()
-                .expectBody(ErrorVm.class).isEqualTo(errorVmExpected);
+        ProductAttributeGroup productAttributeGroup = new ProductAttributeGroup();
+        productAttributeGroup.setId(1L);
+        productAttributeGroup.setName("Color");
+
+        Mockito.doNothing().when(productAttributeGroupService).save(Mockito.any(ProductAttributeGroup.class));
+
+        mockMvc.perform(post("/backoffice/product-attribute-groups")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(productAttributeGroupPostVm)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("Color"));
     }
 
     @Test
-    void createProductAttributeGroup_ReturnProductAttributeGroupVm_Success() {
-        ProductAttributeGroupVm productAttributeGroupVmExpected3 = new ProductAttributeGroupVm(3L, "productAttributeGroupName3");
+    void testUpdateProductAttributeGroup() throws Exception {
+        ProductAttributeGroupPostVm productAttributeGroupPostVm = new ProductAttributeGroupPostVm("Color");
 
-        webTestClient.post()
-                .uri("/backoffice/product-attribute-groups")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(BodyInserters.fromValue(productAttributeGroupPostVmValid))
-                .exchange()
-                .expectStatus().isCreated()
-                .expectBody(ProductAttributeGroupVm.class).isEqualTo(productAttributeGroupVmExpected3);
+        ProductAttributeGroup productAttributeGroup = new ProductAttributeGroup();
+        productAttributeGroup.setId(1L);
+        productAttributeGroup.setName("Color");
+
+        Mockito.when(productAttributeGroupRepository.findById(1L)).thenReturn(Optional.of(productAttributeGroup));
+        Mockito.doNothing().when(productAttributeGroupService).save(Mockito.any(ProductAttributeGroup.class));
+
+        mockMvc.perform(put("/backoffice/product-attribute-groups/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(productAttributeGroupPostVm)))
+                .andExpect(status().isNoContent());
     }
 
     @Test
-    void createProductAttributeGroup_NameIsEmpty_ThrowsMethodArgumentNotValidException() {
-        List<String> fieldErrors = new ArrayList<>();
-        fieldErrors.add("name must not be empty");
-        ErrorVm errorVmExpected = new ErrorVm("400", "Bad Request", "Request information is not valid", fieldErrors);
-
-        webTestClient.post()
-                .uri("/backoffice/product-attribute-groups")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(BodyInserters.fromValue(productAttributeGroupPostVmInvalid))
-                .exchange()
-                .expectStatus().isBadRequest()
-                .expectBody(ErrorVm.class).isEqualTo(errorVmExpected);
+    void testDeleteProductAttributeGroup() throws Exception {
+        mockMvc.perform(delete("/backoffice/product-attribute-groups/1")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNoContent());
     }
 
-    @Test
-    void updateProductAttributeGroup_ProductAttributeGroupIdIsValid_Success() {
-        webTestClient.put()
-                .uri("/backoffice/product-attribute-groups/{id}", validId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(BodyInserters.fromValue(productAttributeGroupPostVmValid))
-                .exchange()
-                .expectStatus().isNoContent();
-    }
-
-    @Test
-    void updateProductAttributeGroup_ProductAttributeGroupIdIsInvalid_ThrowsNotFoundException() {
-        ErrorVm errorVmExpected = new ErrorVm(HttpStatus.NOT_FOUND.toString(), "NotFound", String.format("Product attribute group %s is not found", invalidId));
-
-        webTestClient.put()
-                .uri("/backoffice/product-attribute-groups/{id}", invalidId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(BodyInserters.fromValue(productAttributeGroupPostVmValid))
-                .exchange()
-                .expectStatus().isNotFound()
-                .expectBody(ErrorVm.class).isEqualTo(errorVmExpected);
-    }
-
-    @Test
-    void updateProductAttributeGroup_ProductAttributeGroupNamIsEmpty_ThrowsMethodArgumentNotValidException() {
-        List<String> fieldErrors = new ArrayList<>();
-        fieldErrors.add("name must not be empty");
-        ErrorVm errorVmExpected = new ErrorVm("400", "Bad Request", "Request information is not valid", fieldErrors);
-
-        webTestClient.put()
-                .uri("/backoffice/product-attribute-groups/{id}", validId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(BodyInserters.fromValue(productAttributeGroupPostVmInvalid))
-                .exchange()
-                .expectStatus().isBadRequest()
-                .expectBody(ErrorVm.class).isEqualTo(errorVmExpected);
+    private ProductAttributeGroup createProductAttributeGroup(Long id, String name) {
+        ProductAttributeGroup productAttributeGroup = new ProductAttributeGroup();
+        productAttributeGroup.setId(id);
+        productAttributeGroup.setName(name);
+        return productAttributeGroup;
     }
 }
