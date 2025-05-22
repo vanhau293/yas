@@ -1,10 +1,8 @@
-import type { NextPage } from 'next'
-import styles from '../styles/Home.module.css'
+import type { NextPage } from 'next';
+import LatestItemPanel from 'modules/home/components/LatestItemPanel';
 
 const Home: NextPage = () => {
-  return (
-    <></>
-  )
-}
+  return <LatestItemPanel />;
+};
 
-export default Home
+export default Home;

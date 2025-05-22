@@ -1,20 +1,30 @@
 package com.yas.product.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.yas.commonlibrary.model.AbstractAuditEntity;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import javax.persistence.*;
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@Table(name="category")
+@Table(name = "category")
 public class Category extends AbstractAuditEntity {
 
     @Id
@@ -33,14 +43,20 @@ public class Category extends AbstractAuditEntity {
 
     private Short displayOrder;
 
+    private Boolean isPublished;
+
+    private Long imageId;
+
     @ManyToOne
     @JoinColumn(name = "parent_id")
     private Category parent;
 
     @OneToMany(mappedBy = "parent", cascade = CascadeType.REMOVE)
+    @JsonIgnore
     private List<Category> categories = new ArrayList<>();
 
     @OneToMany(mappedBy = "category")
+    @JsonIgnore
     private List<ProductCategory> productCategories = new ArrayList<>();
 
     @Override

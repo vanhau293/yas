@@ -1,101 +1,150 @@
-import type { NextPage } from 'next'
+import type { NextPage } from 'next';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { useAccordionButton } from 'react-bootstrap';
-import { isNull } from 'util';
-import { Category } from '../../../modules/catalog/models/Category';
-import { createCategory, getCategories } from '../../../modules/catalog/services/CategoryService';
+import { useRouter } from 'next/router';
+import React, { useEffect, useState } from 'react';
+import { SubmitHandler, useForm } from 'react-hook-form';
+import slugify from 'slugify';
+
+import CategoryImage from '@catalogComponents/CategoryImage';
+import { Category } from '@catalogModels/Category';
+import { createCategory, getCategories } from '@catalogServices/CategoryService';
+import { CheckBox, Input, TextArea } from '@commonItems/Input';
+import { handleCreatingResponse } from '@commonServices/ResponseStatusHandlingService';
+import { CATEGORIES_URL } from 'constants/Common';
 
 const CategoryCreate: NextPage = () => {
-  var slugify = require('slugify')
+  const router = useRouter();
+  const { handleSubmit, setValue, register } = useForm<Category>();
   const [categories, setCategories] = useState<Category[]>([]);
-  const handleSubmit = async (event:any) => {
-    event.preventDefault()
-    if(event.target.parentCategory.value==0) event.target.parentCategory.value=null;
-    let category : Category = {
+
+  useEffect(() => {
+    getCategories().then((data) => {
+      setCategories(data);
+    });
+  }, []);
+
+  const onHandleSubmit: SubmitHandler<Category> = async (data: Category) => {
+    const category: Category = {
       id: 0,
-      name: event.target.name.value,
-      slug: event.target.slug.value,
-      description: event.target.description.value,
-      parentId: event.target.parentCategory.value,
-      parentName: "",
-      metaKeywords: event.target.metaKeywords.value,
-      metaDescription: event.target.metaDescription.value,
-      displayOrder: event.target.displayOrder.value,
+      name: data.name,
+      slug: data.slug,
+      description: data.description,
+      parentId: data.parentId && +data.parentId === 0 ? null : data.parentId,
+      metaKeywords: data.metaKeywords,
+      metaDescription: data.metaDescription,
+      displayOrder: data.displayOrder,
+      isPublish: data.isPublish,
+      imageId: data.imageId,
+    };
+    const response = await createCategory(category);
+
+    if (response.status === 201) {
+      router.replace(CATEGORIES_URL);
     }
-    category = await createCategory(category);
-    location.replace("/catalog/categories");
-  }
- useEffect(()=>{
-  getCategories()
-      .then((data) => {
-        setCategories(data);
-      });
- },[])
+
+    handleCreatingResponse(response);
+  };
+
+  const renderCategoriesHierarchy: Function = (
+    id: number,
+    list: Array<Category>,
+    parentHierarchy: string
+  ) => {
+    let renderArr = list.filter((e) => e.parentId == id);
+    const newArr = list.filter((e) => e.parentId != id);
+    renderArr = renderArr.sort((a: Category, b: Category) => a.name.localeCompare(b.name));
+    return renderArr.map((category: Category) => (
+      <React.Fragment key={category.id}>
+        <option value={category.id} key={category.id}>
+          {parentHierarchy + category.name}
+        </option>
+        {renderCategoriesHierarchy(category.id, newArr, parentHierarchy + category.name + ' >> ')}
+      </React.Fragment>
+    ));
+  };
+
   return (
-    <>
-    <div className='row mt-5'>
-      <div className='col-md-8'>
-        <h2>Create category</h2>
-        <form onSubmit={handleSubmit} name='form'>
-        <div className="mb-3">
-          <label className='form-label' htmlFor="name">Name</label>
-          <input className="form-control" type="text" id="name" name="name" required 
-          onChange={(e)=>{
-            let slug = document.getElementById("slug")
-            slug?.setAttribute('value', slugify(e.target.value, {
-              replacement: '-',  // replace spaces with replacement character, defaults to `-`
-              remove: undefined, // remove characters that match regex, defaults to `undefined`
-              lower: true,      // convert to lower case, defaults to `false`
-              strict: false,     // strip special characters except replacement, defaults to `false`
-              locale: 'vi',      // language code of the locale to use
-              trim: true         // trim leading and trailing replacement chars, defaults to `true`
-            }))
-          }}/>
-        </div>
-        <div className="mb-3">
-          <label className='form-label' htmlFor="slug">Slug</label>
-          <input className="form-control" type="text" id="slug" name="slug" required />
-        </div>
-        <div className="mb-3">
-          <label className='form-label' htmlFor="metaKeywords">Meta Keywords</label>
-          <input className="form-control" type="text" id="metaKeywords" name="metaKeywords"  />
-        </div>
-        <div className="mb-3">
-          <label className='form-label' htmlFor="metaDescription">Meta Description</label>
-          <textarea className="form-control" id="metaDescription" name="metaDescription" />
-        </div>
-        <div className="mb-3">
-          <label className='form-label' htmlFor="parentCategory">Parent category</label>
-          <select className="form-control" id="parentCategory" name="parentCategory">
-            <option value={0}>
-                    Top
-                  </option>
-                  {categories.map((category) => (
-                    <option value={category.id} key={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-          </select>
-        </div>
-        <div className="mb-3">
-          <label className='form-label' htmlFor="description">Description</label>
-          <textarea className="form-control" id="description" name="description" />
-        </div>
-        <div className="mb-3">
-          <label className='form-label' htmlFor="displayOrder">Display Order</label>
-          <input className="form-control" type="number" defaultValue={0} id="displayOrder" name="displayOrder" />
-        </div>
-        <button className="btn btn-primary" type="submit">Save</button>
+    <div className="row my-5">
+      <div className="col-md-8">
+        <h2 className="mb-3">Create category</h2>
+        <form onSubmit={handleSubmit(onHandleSubmit)} name="form">
+          <div className="mb-3">
+            <Input
+              labelText="Name"
+              field="name"
+              register={register}
+              registerOptions={{
+                required: { value: true, message: 'Category name is required' },
+                onChange: (e) => {
+                  setValue(
+                    'slug',
+                    slugify(e.target.value, {
+                      lower: true,
+                      strict: true,
+                    })
+                  );
+                },
+              }}
+            />
+          </div>
+          <div className="mb-3">
+            <Input
+              labelText="Slug"
+              field="slug"
+              register={register}
+              registerOptions={{
+                required: { value: true, message: 'Slug is required' },
+              }}
+            />
+          </div>
+          <div className="mb-3">
+            <label className="form-label" htmlFor="parentCategory">
+              Parent category
+            </label>
+            <select className="form-control" id="parentCategory" {...register('parentId')}>
+              <option value={0}>Top</option>
+              {renderCategoriesHierarchy(-1, categories, '')}
+            </select>
+          </div>
+          <div className="mb-3">
+            <TextArea labelText="Description" field="description" register={register} />
+          </div>
+          <div className="mb-3">
+            <Input labelText="Meta Keywords" field="metaKeywords" register={register} />
+          </div>
+          <div className="mb-3">
+            <TextArea labelText="Meta Description" field="metaDescription" register={register} />
+          </div>
+          <div className="mb-3">
+            <Input
+              labelText="Display Order"
+              defaultValue={0}
+              field="displayOrder"
+              register={register}
+            />
+          </div>
+          <div className="d-flex">
+            <CheckBox
+              labelText="Publish"
+              field="isPublish"
+              register={register}
+              defaultChecked={false}
+            />
+          </div>
+          <CategoryImage setValue={setValue} id="category-image" image={null} />
+          <button className="btn btn-primary" type="submit">
+            Save
+          </button>
           &emsp;
           <Link href="/catalog/categories">
-          <button className="btn btn-outline-secondary" type="button">Cancel</button>
+            <button className="btn btn-outline-secondary" type="button">
+              Cancel
+            </button>
           </Link>
         </form>
       </div>
     </div>
-    </>
-  )
+  );
 };
 
-export default CategoryCreate
+export default CategoryCreate;

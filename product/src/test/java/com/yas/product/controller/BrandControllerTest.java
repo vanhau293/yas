@@ -1,96 +1,128 @@
 package com.yas.product.controller;
-import com.yas.product.exception.NotFoundException;
+
+import com.yas.product.ProductApplication;
 import com.yas.product.model.Brand;
 import com.yas.product.repository.BrandRepository;
-import com.yas.product.viewmodel.BrandPostVm;
-import com.yas.product.viewmodel.BrandVm;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
+import com.yas.product.service.BrandService;
+import com.yas.product.viewmodel.brand.BrandPostVm;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.util.UriComponentsBuilder;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import java.util.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.mock;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.shaded.com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Optional;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-public class BrandControllerTest {
+@ExtendWith(SpringExtension.class)
+@WebMvcTest(controllers = BrandController.class)
+@ContextConfiguration(classes = ProductApplication.class)
+@AutoConfigureMockMvc(addFilters = false)
+class BrandControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
     private BrandRepository brandRepository;
-    private BrandController brandController;
-    private final Brand brand1 = new Brand();
 
-    @BeforeEach
-    void init(){
-        brandRepository = mock(BrandRepository.class);
-        brandController = new BrandController(brandRepository);
-        brand1.setId(1L);
-        brand1.setName("dien thoai");
-        brand1.setSlug("dien-thoai");
+    @MockBean
+    private BrandService brandService;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Test
+    void testListBrands() throws Exception {
+
+        when(brandRepository.findByNameContainingIgnoreCase(any())).thenReturn(Arrays.asList(
+                createBrand(1L, "Brand 1"),
+                createBrand(2L, "Brand 2")
+        ));
+
+        mockMvc.perform(get("/backoffice/brands"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(1L))
+                .andExpect(jsonPath("$[0].name").value("Brand 1"))
+                .andExpect(jsonPath("$[1].id").value(2L))
+                .andExpect(jsonPath("$[1].name").value("Brand 2"));
     }
 
     @Test
-    void listBrands_ReturnList_Success() {
-        Brand brand2 = new Brand();
-        brand2.setId(2L);
-        brand2.setName("ao quan");
-        brand2.setSlug("ao-quan");
-        List<Brand> brands= new ArrayList<>(Arrays.asList(brand1,brand2));
-        when(brandRepository.findAll()).thenReturn(brands);
-        ResponseEntity<List<BrandVm>> result = brandController.listBrands();
-        assertThat(result.getStatusCode(),is(HttpStatus.OK));
-        assertEquals(Objects.requireNonNull(result.getBody()).size(), brands.size());
-        for(int i=0;i<brands.size();i++){
-            assertEquals(result.getBody().get(i).slug(), brands.get(i).getSlug());
-            assertEquals(result.getBody().get(i).name(), brands.get(i).getName());
-        }
+    void testGetBrand() throws Exception {
+        Brand brand = createBrand(1L, "Brand 1");
+
+        when(brandRepository.findById(1L)).thenReturn(Optional.of(brand));
+
+        mockMvc.perform(get("/backoffice/brands/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1L))
+                .andExpect(jsonPath("$.name").value("Brand 1"));
     }
 
     @Test
-    void getBrand_FindIdBrand_ThrowException(){
-        when(brandRepository.findById(1L)).thenReturn(Optional.empty());
-        NotFoundException exception = Assertions.assertThrows(NotFoundException.class,
-                () -> brandController.getBrand(1L));
-        assertThat(exception.getMessage(),is("Brand 1 is not found"));
+    void testGetBrandNotFound() throws Exception {
+        when(brandRepository.findById(anyLong())).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/backoffice/brands/999"))
+                .andExpect(status().isNotFound());
     }
 
     @Test
-    void getBrand_FindIdBrand_Success(){
-        when(brandRepository.findById(1L)).thenReturn(Optional.of(brand1));
-        ResponseEntity<BrandVm> result = brandController.getBrand(1L);
-        assertEquals(Objects.requireNonNull(result.getBody()).name(), brand1.getName());
-        assertEquals(result.getBody().slug(), brand1.getSlug());
+    void testCreateBrand() throws Exception {
+        BrandPostVm brandPostVm = new BrandPostVm("New Brand", "newB", true);
+        Brand brand = createBrand(1L, "New Brand");
+
+        when(brandService.create(any(BrandPostVm.class))).thenReturn(brand);
+
+        mockMvc.perform(post("/backoffice/brands")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(brandPostVm)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(1L))
+                .andExpect(jsonPath("$.name").value("New Brand"));
     }
 
     @Test
-    void createBrand_SaveBrandPostVm_Success(){
-        BrandPostVm brandPostVm = new BrandPostVm("samsung","samsung");
-        ResponseEntity<BrandVm> result = brandController.createBrand(brandPostVm, UriComponentsBuilder.fromPath("/brands/{id}"));
-        assertEquals(Objects.requireNonNull(result.getBody()).name(), brandPostVm.name());
-        assertEquals(result.getBody().slug(), brandPostVm.slug());
+    void testUpdateBrand() throws Exception {
+        BrandPostVm brandPostVm = new BrandPostVm("Updated Brand", "update-b", true);
+
+        mockMvc.perform(put("/backoffice/brands/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(brandPostVm)))
+                .andExpect(status().isNoContent());
     }
 
     @Test
-    void updateBrand_FindIdBrandUpdate_ThrowException(){
-        BrandPostVm brandPostVm = new BrandPostVm("samsung","samsung");
-        when(brandRepository.findById(1L)).thenReturn(Optional.empty());
-        NotFoundException exception = Assertions.assertThrows(NotFoundException.class,
-                () -> brandController.updateBrand(1L,brandPostVm));
-        assertThat(exception.getMessage(),is("Brand 1 is not found"));
+    void testDeleteBrand() throws Exception {
+        Brand brand = createBrand(1L, "Brand 1");
+        when(brandRepository.findById(1L)).thenReturn(Optional.of(brand));
+
+        mockMvc.perform(delete("/backoffice/brands/1"))
+                .andExpect(status().isNoContent());
     }
 
-    @Test
-    void updateBrand_UpdateBrand_Success(){
-        BrandPostVm brandPostVm = new BrandPostVm("samsung","samsung");
-        when(brandRepository.findById(1L)).thenReturn(Optional.of(brand1));
-        brandRepository.findById(1L).get().setSlug(brandPostVm.slug());
-        brandRepository.findById(1L).get().setName(brandPostVm.name());
-        when(brandRepository.save(brand1)).thenReturn(brand1);
-        assertThat(brand1.getName(), is(brandPostVm.name()));
-        assertThat(brand1.getSlug(), is(brandPostVm.slug()));
-        ResponseEntity<Void> result = brandController.updateBrand(1L,brandPostVm);
-        assertThat(result.getStatusCode(),is(HttpStatus.NO_CONTENT));
+    private Brand createBrand(Long id, String name) {
+        Brand brand = new Brand();
+        brand.setId(id);
+        brand.setName(name);
+        brand.setProducts(Collections.emptyList());
+        return brand;
     }
 }

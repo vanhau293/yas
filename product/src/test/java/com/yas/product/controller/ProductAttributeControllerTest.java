@@ -1,180 +1,176 @@
 package com.yas.product.controller;
 
-import com.yas.product.exception.BadRequestException;
-import com.yas.product.exception.NotFoundException;
+import com.yas.product.ProductApplication;
 import com.yas.product.model.attribute.ProductAttribute;
 import com.yas.product.model.attribute.ProductAttributeGroup;
-import com.yas.product.repository.ProductAttributeGroupRepository;
+import com.yas.product.model.attribute.ProductAttributeValue;
 import com.yas.product.repository.ProductAttributeRepository;
-import com.yas.product.viewmodel.*;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
+import com.yas.product.service.ProductAttributeService;
+import com.yas.product.viewmodel.productattribute.ProductAttributeGetVm;
+import com.yas.product.viewmodel.productattribute.ProductAttributeListGetVm;
+import com.yas.product.viewmodel.productattribute.ProductAttributePostVm;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.util.UriComponents;
-import org.springframework.web.util.UriComponentsBuilder;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.shaded.com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.security.Principal;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-public class ProductAttributeControllerTest {
+@ExtendWith(SpringExtension.class)
+@WebMvcTest(controllers = ProductAttributeController.class)
+@ContextConfiguration(classes = ProductApplication.class)
+@AutoConfigureMockMvc(addFilters = false)
+class ProductAttributeControllerTest {
 
-    ProductAttributeRepository productAttributeRepository;
-    ProductAttributeGroupRepository productAttributeGroupRepository;
-    ProductAttributeController productAttributeController;
-    UriComponentsBuilder uriComponentsBuilder;
-    Principal principal;
-    ProductAttribute productAttribute = new ProductAttribute();
+    @Autowired
+    private MockMvc mockMvc;
 
-    ProductAttributeGroup productAttributeGroup = new ProductAttributeGroup();
+    @MockBean
+    private ProductAttributeRepository productAttributeRepository;
 
-    @BeforeEach
-    void setUp(){
-        productAttributeRepository = mock(ProductAttributeRepository.class);
-        productAttributeGroupRepository = mock(ProductAttributeGroupRepository.class);
-        uriComponentsBuilder = mock(UriComponentsBuilder.class);
-        principal = mock(Principal.class);
-        productAttributeController = new ProductAttributeController(productAttributeRepository, productAttributeGroupRepository);
-        productAttributeGroup.setId(1L);
-        productAttributeGroup.setName("Computer");
-        productAttribute.setId(1L);
-        productAttribute.setName("Ram");
-        productAttribute.setProductAttributeGroup(productAttributeGroup);
+    @MockBean
+    private ProductAttributeService productAttributeService;
+
+    @InjectMocks
+    private ProductAttributeController productAttributeController;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Test
+    void testListProductAttributes() throws Exception {
+        when(productAttributeRepository.findAll())
+                .thenReturn(Arrays.asList(
+                        createProductAttribute(1L, "Red", "Color"),
+                        createProductAttribute(2L, "11 inch", "Size")
+                ));
+
+        mockMvc.perform(get("/backoffice/product-attribute"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(1L))
+                .andExpect(jsonPath("$[0].name").value("Red"))
+                .andExpect(jsonPath("$[1].id").value(2L))
+                .andExpect(jsonPath("$[1].name").value("11 inch"));
     }
 
     @Test
-    void listProductAttributes_ValidListProductAttributeGetVm_Success(){
-        List<ProductAttribute> listProductAttribute = List.of(productAttribute);
-        when(productAttributeRepository.findAll()).thenReturn(listProductAttribute);
-        ResponseEntity<List<ProductAttributeGetVm>> result = productAttributeController.listProductAttributes();
-        assertThat(result.getStatusCode(),is(HttpStatus.OK));
-        assertEquals(Objects.requireNonNull(result.getBody()).size(), listProductAttribute.size());
-        for(int i=0;i<listProductAttribute.size();i++){
-            assertEquals(result.getBody().get(i).id(), listProductAttribute.get(i).getId());
-            assertEquals(result.getBody().get(i).name(), listProductAttribute.get(i).getName());
-        }
+    void testGetPageableProductAttributes() throws Exception {
+        List<ProductAttributeGetVm> content = List.of(ProductAttributeGetVm.fromModel(
+                createProductAttribute(1L, "Red", "Color")));
+        ProductAttributeListGetVm pageableResponse = new ProductAttributeListGetVm(
+                content, 0, 10, 1, 1, true);
+
+        when(productAttributeService.getPageableProductAttributes(anyInt(), anyInt()))
+                .thenReturn(pageableResponse);
+
+        mockMvc.perform(get("/backoffice/product-attribute/paging?pageNo=0&pageSize=10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalPages").value(1));
     }
 
     @Test
-    void getProductAttribute_FinProductAttributeById_ThrowException(){
-        when(productAttributeRepository.findById(1L)).thenReturn(Optional.empty());
-        NotFoundException notFoundException =  Assertions.assertThrows(NotFoundException.class,
-                () -> productAttributeController.getProductAttribute(1L));
-        assertThat(notFoundException.getMessage(),is("Product attribute 1 is not found"));
-    }
-
-    @Test
-    void getProductAttribute_FindProductAttribute_Success(){
+    void testGetProductAttribute() throws Exception {
+        ProductAttribute productAttribute = createProductAttribute(1L, "Red", "Color");
         when(productAttributeRepository.findById(1L)).thenReturn(Optional.of(productAttribute));
-        ResponseEntity<ProductAttributeGetVm> result = productAttributeController.getProductAttribute(1L);
-        assertEquals(Objects.requireNonNull(result.getBody()).name(), productAttribute.getName());
-        assertEquals(result.getBody().id(), productAttribute.getId());
-        assertEquals(result.getBody().id(), productAttribute.getId());
-        assertEquals(result.getBody().productAttributeGroup(), productAttribute.getProductAttributeGroup().getName());
+
+        mockMvc.perform(get("/backoffice/product-attribute/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1L))
+                .andExpect(jsonPath("$.name").value("Red"));
     }
 
     @Test
-    void createProductAttribute_FindIdProductAttributeGroup_ThrowException(){
-        ProductAttributePostVm productAttributePostVm = new ProductAttributePostVm("Ram",1L);
-        when(productAttributeGroupRepository.findById(productAttributePostVm.productAttributeGroupId())).thenReturn(Optional.empty());
-        BadRequestException exception =  Assertions.assertThrows(BadRequestException.class,
-                () -> productAttributeController.createProductAttribute(productAttributePostVm, UriComponentsBuilder.fromPath("/product-attribute/{id}"), principal));
-        assertThat(exception.getMessage(),is("Product attribute group 1 is not found"));
+    void testGetProductAttributeNotFound() throws Exception {
+        when(productAttributeRepository.findById(anyLong())).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/backoffice/product-attribute/999"))
+                .andExpect(status().isNotFound());
     }
 
     @Test
-    void createProductAttribute_ValidProductAttributeWithIdProductAttributeGroup_Success(){
-        ProductAttributePostVm productAttributePostVm = new ProductAttributePostVm("Ram",1L);
-        var ProductAttributeCaptor = ArgumentCaptor.forClass(ProductAttribute.class);
-        ProductAttribute savedProductAttribute = mock(ProductAttribute.class);
-        when(productAttributeGroupRepository.findById(productAttributePostVm.productAttributeGroupId())).thenReturn(Optional.of(productAttributeGroup));
-        when(savedProductAttribute.getProductAttributeGroup()).thenReturn(productAttributeGroup);
-        when(productAttributeRepository.saveAndFlush(ProductAttributeCaptor.capture())).thenReturn(savedProductAttribute);
-        UriComponentsBuilder newUriComponentsBuilder = mock(UriComponentsBuilder.class);
-        UriComponents uriComponents = mock(UriComponents.class);
-        when(uriComponentsBuilder.replacePath("/product-attribute/{id}")).thenReturn(newUriComponentsBuilder);
-        when(newUriComponentsBuilder.buildAndExpand(savedProductAttribute.getId())).thenReturn(uriComponents);
-        ResponseEntity<ProductAttributeGetVm> result = productAttributeController.createProductAttribute(productAttributePostVm
-                , uriComponentsBuilder, principal);
-        verify(productAttributeRepository).saveAndFlush(ProductAttributeCaptor.capture());
-        ProductAttribute productAttributeValue = ProductAttributeCaptor.getValue();
-        assertEquals(productAttributeValue.getName(), productAttributePostVm.name());
-        assertEquals(Objects.requireNonNull(result.getBody()).productAttributeGroup() , productAttributeGroup.getName() );
-    }
-    @Test
-    void createProductAttribute_ValidProductAttributeWithOutIdProductAttributeGroup_Success(){
-        ProductAttributePostVm productAttributePostVm = mock(ProductAttributePostVm.class);
-        var ProductAttributeCaptor = ArgumentCaptor.forClass(ProductAttribute.class);
-        when(productAttributePostVm.name()).thenReturn("Ram");
-        when(productAttributePostVm.productAttributeGroupId()).thenReturn(null);
-        ProductAttribute savedProductAttribute = mock(ProductAttribute.class);
-        when(productAttributeRepository.saveAndFlush(ProductAttributeCaptor.capture())).thenReturn(savedProductAttribute);
-        UriComponentsBuilder newUriComponentsBuilder = mock(UriComponentsBuilder.class);
-        UriComponents uriComponents = mock(UriComponents.class);
-        when(uriComponentsBuilder.replacePath("/product-attribute/{id}")).thenReturn(newUriComponentsBuilder);
-        when(newUriComponentsBuilder.buildAndExpand(savedProductAttribute.getId())).thenReturn(uriComponents);
-        ResponseEntity<ProductAttributeGetVm> result = productAttributeController.createProductAttribute(productAttributePostVm
-                , uriComponentsBuilder, principal);
-        verify(productAttributeRepository).saveAndFlush(ProductAttributeCaptor.capture());
-        ProductAttribute productAttributeValue = ProductAttributeCaptor.getValue();
-        assertEquals(productAttributeValue.getName(), productAttributePostVm.name());
-        assertNull(Objects.requireNonNull(result.getBody()).productAttributeGroup());
+    void testCreateProductAttribute() throws Exception {
+        ProductAttribute productAttribute = createProductAttribute(1L, "Red", "Color");
+        ProductAttributePostVm postVm = new ProductAttributePostVm("Material", 2L);
+
+        when(productAttributeService.save(any(ProductAttributePostVm.class))).thenReturn(productAttribute);
+
+        mockMvc.perform(post("/backoffice/product-attribute")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(postVm)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(1L))
+                .andExpect(jsonPath("$.name").value("Red"));
     }
 
     @Test
-    void updateProductAttribute_FindIdProductAttribute_ThrowException(){
-        ProductAttributePostVm productAttributePostVm = new ProductAttributePostVm("Ram",1L);
-        when(productAttributeRepository.findById(1L)).thenReturn(Optional.empty());
-        NotFoundException exception =  Assertions.assertThrows(NotFoundException.class,
-                () -> productAttributeController.updateProductAttribute(1L,productAttributePostVm));
-        assertThat(exception.getMessage(),is("Product attribute group 1 is not found"));
+    void testUpdateProductAttribute() throws Exception {
+        ProductAttributePostVm postVm = new ProductAttributePostVm("Red", 2L);
+
+        when(productAttributeService.update(any(ProductAttributePostVm.class), anyLong()))
+                .thenReturn(new ProductAttribute());
+
+        mockMvc.perform(put("/backoffice/product-attribute/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(postVm)))
+                .andExpect(status().isNoContent());
     }
+
     @Test
-    void updateProductAttribute_FindProductAttributeGroupId_ThrowException(){
-        ProductAttributePostVm productAttributePostVm = new ProductAttributePostVm("Ram",1L);
+    void testDeleteProductAttribute() throws Exception {
+        ProductAttribute productAttribute = createProductAttribute(1L, "Red","Color");
         when(productAttributeRepository.findById(1L)).thenReturn(Optional.of(productAttribute));
-        when(productAttributeGroupRepository.findById(productAttributePostVm.productAttributeGroupId())).thenReturn(Optional.empty());
-        BadRequestException exception =  Assertions.assertThrows(BadRequestException.class,
-                () -> productAttributeController.updateProductAttribute(1L,productAttributePostVm));
-        assertThat(exception.getMessage(),is("Product attribute group 1 is not found"));
+
+        doNothing().when(productAttributeRepository).deleteById(1L);
+
+        mockMvc.perform(delete("/backoffice/product-attribute/1"))
+                .andExpect(status().isNoContent());
     }
+
     @Test
-    void updateProductAttribute_ValidProductAttributePostVmWithProductAttributeGroupId_Success(){
-        ProductAttributePostVm productAttributePostVm = new ProductAttributePostVm("Card",1L);
-        when(productAttributeGroupRepository.findById(productAttributePostVm.productAttributeGroupId())).thenReturn(Optional.of(productAttributeGroup));
+    void testDeleteProductAttributeWithAttributeValues() throws Exception {
+        ProductAttribute productAttribute = createProductAttribute(1L, "Red", "Color");
+        productAttribute.setAttributeValues(Collections.singletonList(new ProductAttributeValue()));
         when(productAttributeRepository.findById(1L)).thenReturn(Optional.of(productAttribute));
-        var ProductAttributeCaptor = ArgumentCaptor.forClass(ProductAttribute.class);
-        ProductAttribute savedProductAttribute = mock(ProductAttribute.class);
-        when(productAttributeRepository.saveAndFlush(ProductAttributeCaptor.capture())).thenReturn(savedProductAttribute);
-        ResponseEntity<Void> result = productAttributeController.updateProductAttribute(1L,productAttributePostVm);
-        verify(productAttributeRepository).saveAndFlush(ProductAttributeCaptor.capture());
-        ProductAttribute productAttributeValue = ProductAttributeCaptor.getValue();
-        assertEquals(productAttributeValue.getName(), productAttributePostVm.name());
-        assertThat(result.getStatusCode(),is(HttpStatus.NO_CONTENT));
+
+        mockMvc.perform(delete("/backoffice/product-attribute/1"))
+                .andExpect(status().isBadRequest());
     }
-    @Test
-    void updateProductAttribute_ValidProductAttributePostVmWithOutProductAttributeGroupId_Success(){
-        ProductAttributePostVm productAttributePostVm = mock(ProductAttributePostVm.class);
-        when(productAttributePostVm.name()).thenReturn("CPU");
-        when(productAttributePostVm.productAttributeGroupId()).thenReturn(null);
-        when(productAttributeRepository.findById(1L)).thenReturn(Optional.of(productAttribute));
-        var ProductAttributeCaptor = ArgumentCaptor.forClass(ProductAttribute.class);
-        ProductAttribute savedProductAttribute = mock(ProductAttribute.class);
-        when(productAttributeRepository.saveAndFlush(ProductAttributeCaptor.capture())).thenReturn(savedProductAttribute);
-        ResponseEntity<Void> result = productAttributeController.updateProductAttribute(1L,productAttributePostVm);
-        verify(productAttributeRepository).saveAndFlush(ProductAttributeCaptor.capture());
-        ProductAttribute productAttributeValue = ProductAttributeCaptor.getValue();
-        assertEquals(productAttributeValue.getProductAttributeGroup(),  productAttribute.getProductAttributeGroup());
-        assertThat(result.getStatusCode(),is(HttpStatus.NO_CONTENT));
+
+    private ProductAttribute createProductAttribute(Long id, String name, String groupName) {
+        ProductAttribute productAttribute = new ProductAttribute();
+        productAttribute.setId(id);
+        productAttribute.setName(name);
+        productAttribute.setProductAttributeGroup(new ProductAttributeGroup());
+        productAttribute.getProductAttributeGroup().setName(groupName);
+        return productAttribute;
     }
 }
+
+
+
+
+
+
+

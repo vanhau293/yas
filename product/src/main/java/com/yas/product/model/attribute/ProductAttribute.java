@@ -1,24 +1,30 @@
 package com.yas.product.model.attribute;
 
-import com.yas.product.model.AbstractAuditEntity;
-import lombok.Getter;
-import lombok.Setter;
-
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
-import javax.persistence.JoinColumn;
-import javax.persistence.ManyToOne;
-import javax.persistence.OneToMany;
-import javax.persistence.Table;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.yas.commonlibrary.model.AbstractAuditEntity;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "product_attribute")
 @Getter
 @Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ProductAttribute extends AbstractAuditEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -29,6 +35,10 @@ public class ProductAttribute extends AbstractAuditEntity {
     @ManyToOne
     @JoinColumn(name = "product_attribute_group_id")
     private ProductAttributeGroup productAttributeGroup;
+
+    @OneToMany(mappedBy = "productAttribute")
+    @JsonIgnore
+    private List<ProductAttributeTemplate> productAttributeTemplates = new ArrayList<>();
 
     @OneToMany(mappedBy = "productAttribute")
     private List<ProductAttributeValue> attributeValues = new ArrayList<>();
